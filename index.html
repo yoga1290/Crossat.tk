@@ -1,0 +1,201 @@
+<html>
+<head>
+<title>Crossa.tK</title>
+
+<! <script src="jquery.min.js">
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js">
+</script>
+
+ <style>
+  p { margin-left:0px; }
+</style>
+
+</head>
+<body>
+
+<! <p align="center">
+<p align="left">
+<canvas	id="canvas"	width="400"	height="400"></canvas>
+<br>
+<div	id="mess"></div>
+<div	id="score"></div>
+</p>
+<script>
+var context;
+var pts=new Array([0,0]);
+var myturn=true;
+var w8=false;
+var gameid=-1,myScore=0,opScore=0;
+
+
+function intersect(a,b,c,d)
+{
+	//details: http://paulbourke.net/geometry/lineline2d/
+	var dm=(	(d[1]-c[1])*(b[0]-a[0])-(d[0]-c[0])*(b[1]-a[1])	);
+
+	var ua= (d[0]-c[0])*(a[1]-c[1])-(d[1]-c[1])*(a[0]-c[0]);
+		ua/=dm;
+	var ub= (b[0]-a[0])*(a[1]-c[1])-(b[1]-a[1])*(a[0]-c[0]);
+		ub/=dm;
+
+	if(0<ua && ua<1 &&
+		0<ub && ub<1)
+		return [	a[0]+ua*(b[0]-a[0])	,	a[1]+ua*(b[1]-a[1])	];
+	return [];
+}
+function updateScore()
+{
+	if(pts.length<4) return;
+
+	var interesectPt;
+	for(var i=1;i<pts.length;i++)
+	{
+		interesectPt=intersect(pts[pts.length-1],pts[pts.length-2],pts[i-1],pts[i]);
+		if(interesectPt.length>0)
+		{
+			if(myturn)
+				myScore++;
+			else
+			{
+				opScore++;
+			}
+
+			context.beginPath();
+			context.arc(interesectPt[0], interesectPt[1], 10, 0, 2 * Math.PI, false);
+			context.fillStyle = myturn ? "blue":"red";
+			context.fill();
+			context.lineWidth = 1;
+			context.strokeStyle = "black";
+			context.stroke();
+		}
+	}
+	$("#score").html("MyScore: "+myScore+"<br>OpScore:"+opScore);
+}
+
+function isMyTurn()
+{
+	w8=true;
+	$.get('getLastPoint.php?game='+gameid, function(data){
+		
+		if(!w8) return; //some old thread reached there 1st!
+		var res=data.split(",");
+		if(res[0]=="-1" || res[1]=="-1")
+			myturn=true;
+		else if(res[0]==""+pts[pts.length-1][0] && res[1]==""+pts[pts.length-1][1])
+		{
+			$("#mess").html("Please wait for the other player :)<br>");
+			myturn=false;
+		}
+		else
+		{
+			$("#mess").html("");			
+			pts.push([parseInt(res[0]),parseInt(res[1])]);
+			context.beginPath();
+			context.moveTo(pts[pts.length-2][0],pts[pts.length-2][1]);
+			context.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]);
+			context.stroke();
+			updateScore();
+			myturn=true;
+		}
+		w8=false;
+	});
+
+	//if after 2 sec,& yet still not myturn,check again for the last play!
+	setTimeout("if(!myturn) isMyTurn();",2000);
+}
+
+function handup(x,y)
+{
+	if(w8)	return;
+	if(!myturn)
+	{
+		w8=true;
+		isMyTurn(); // w8 for the other player.
+		
+		return;
+	}
+	
+
+	pts.push([x,y]);
+	$.get('setLastPoint.php?game='+gameid+"&x="+x+"&y="+y,function(d){
+		isMyTurn();
+	});
+	updateScore();
+	myturn=false;
+}
+
+function moving(x,y)
+{
+	if(w8)	return;
+
+	if(!myturn)
+		return;
+
+	if(pts.length==0) return;
+
+	context.clearRect(0,0,800,800);
+	for(var i=1;i<pts.length;i++)
+	{
+		context.moveTo(pts[i-1][0],pts[i-1][1]);
+		context.lineTo(pts[i][0],pts[i][1]);
+		context.stroke();
+	}
+
+	context.beginPath();
+	context.moveTo(pts[pts.length-1][0],pts[pts.length-1][1]);
+	context.lineTo(x,y);
+	context.stroke();
+}
+
+
+function main()
+{
+	var oldGame=confirm("Join a running game? \n *otherwise,a new game will be created!");
+	if(oldGame)
+	{
+		gameid=parseInt(	prompt("Game#:","")	);
+		w8=false;
+		isMyTurn();
+//		myturn=true;
+	}	
+	else
+	{
+		gameid=-1;
+		w8=true;
+		myturn=false;
+		$.get('newgame.php', function(data){
+			gameid=parseInt(data);
+			alert("Game#"+gameid+" is here! \n Happy Gaming ;)");
+			w8=false;
+			myturn=true;
+		});
+	}
+
+	var canvas = document.getElementById("canvas");
+	context = canvas.getContext("2d");
+
+	context.lineWidth = 1;
+	context.strokeStyle = "black";
+
+	$("#canvas").mouseup(function(e){
+		handup(e.pageX,e.pageY);
+	});
+
+	$("#canvas").mousemove(function(e){
+		moving(e.pageX,e.pageY);
+	});
+}
+
+$(document).ready(main);
+</script>
+</body>
+<footer>
+<! <p align="center">
+<p align="left">
+<a href="http://github.com/yoga1290/crossat.tk/">
+<img alt="Creative Commons License" style="border-width:0" src="http://i.creativecommons.org/l/by-sa/3.0/88x31.png"></a>
+</p>
+</footer>
+</html>
+
